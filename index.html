@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OBS油门刹车仪表</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background: transparent;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .dashboard {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 20px;
+            padding: 30px 60px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            position: relative;
+        }
+
+        .container {
+            display: flex;
+            gap: 60px;
+        }
+
+        .gauge-wrapper {
+            position: relative;
+            width: 60px;
+        }
+
+        .progress-container {
+            width: 40px;
+            height: 300px;
+            background: rgba(0,0,0,0.15);
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+            margin: 0 auto;
+            transition: box-shadow 0.3s ease;
+        }
+
+        #throttle-bar {
+            background: linear-gradient(to top, #00ff88 0%, #00cc68 100%);
+            transition: height 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        #brake-bar {
+            background: linear-gradient(to top, #ff4444 0%, #cc0000 100%);
+            transition: height 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        #throttle-bar, #brake-bar {
+            width: 100%;
+            height: 0;
+            position: absolute;
+            bottom: 0;
+        }
+
+        .value-display {
+            position: absolute;
+            bottom: -25px;
+            width: 100%;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+            transition: 
+                color 0.2s ease,
+                text-shadow 0.3s ease;
+        }
+
+        /* 基础辉光效果 */
+        .glow-effect {
+            filter: drop-shadow(0 0 0px transparent);
+            transition: filter 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="container">
+            <!-- 油门部分 -->
+            <div class="gauge-wrapper">
+                <div class="progress-container glow-effect" id="throttle-glow">
+                    <div id="throttle-bar"></div>
+                </div>
+                <div class="value-display" id="throttle-text-glow">
+                    <span id="throttle-value">0</span>%
+                </div>
+            </div>
+
+            <!-- 刹车部分 -->
+            <div class="gauge-wrapper">
+                <div class="progress-container glow-effect" id="brake-glow">
+                    <div id="brake-bar"></div>
+                </div>
+                <div class="value-display" id="brake-text-glow">
+                    <span id="brake-value">0</span>%
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 魔爪R3配置
+        const THROTTLE_AXIS = 2;
+        const BRAKE_AXIS = 5;
+
+        // 颜色生成函数
+        function getColor(value, type) {
+            const minSaturation = 0;    // 0%时的饱和度
+            const maxSaturation = 70;   // 100%时的饱和度
+            const lightness = 40;        // 固定明度
+            const saturation = minSaturation + (value / 100) * (maxSaturation - minSaturation);
+            return type === 'throttle' 
+                ? `hsl(145, ${saturation}%, ${lightness}%)` 
+                : `hsl(0, ${saturation}%, ${lightness}%)`;
+        }
+
+        // 辉光强度计算
+        function calculateGlow(value, type) {
+            const maxBlur = 20;        // 最大模糊半径
+            const maxSpread = 5;       // 最大扩散范围
+            const maxOpacity = 0.8;    // 最大透明度
+
+            const intensity = value / 100;
+            const color = type === 'throttle' 
+                ? `rgba(0, 204, 104, ${maxOpacity * intensity})` 
+                : `rgba(204, 0, 0, ${maxOpacity * intensity})`;
+
+            return {
+                boxShadow: `0 0 ${maxBlur * intensity}px ${maxSpread * intensity}px ${color}`,
+                textShadow: `0 0 ${maxBlur * intensity}px ${color}`
+            };
+        }
+
+        function scaleValue(value) {
+            return Math.min(Math.max(((value + 1) / 2 * 100), 0), 100);
+        }
+
+        function updateBars() {
+            const gamepads = navigator.getGamepads();
+            const gamepad = gamepads[0];
+            if (!gamepad) {
+                requestAnimationFrame(updateBars);
+                return;
+            }
+
+            const rawThrottle = gamepad.axes[THROTTLE_AXIS];
+            const rawBrake = gamepad.axes[BRAKE_AXIS];
+
+            // 计算标准化数值
+            const throttleValue = scaleValue(rawThrottle);
+            const brakeValue = scaleValue(rawBrake);
+            
+            // 更新进度条
+            document.getElementById('throttle-bar').style.height = throttleValue + '%';
+            document.getElementById('brake-bar').style.height = brakeValue + '%';
+
+            // 更新数值显示
+            const throttleDisplay = document.getElementById('throttle-value');
+            const brakeDisplay = document.getElementById('brake-value');
+            throttleDisplay.textContent = throttleValue.toFixed(0);
+            brakeDisplay.textContent = brakeValue.toFixed(0);
+
+            // 更新颜色和辉光
+            throttleDisplay.style.color = getColor(throttleValue, 'throttle');
+            brakeDisplay.style.color = getColor(brakeValue, 'brake');
+
+            const throttleGlow = calculateGlow(throttleValue, 'throttle');
+            const brakeGlow = calculateGlow(brakeValue, 'brake');
+
+            // 应用辉光效果
+            document.getElementById('throttle-glow').style.boxShadow = throttleGlow.boxShadow;
+            document.getElementById('brake-glow').style.boxShadow = brakeGlow.boxShadow;
+            document.getElementById('throttle-text-glow').style.textShadow = 
+                `0 1px 2px rgba(255,255,255,0.5), ${throttleGlow.textShadow}`;
+            document.getElementById('brake-text-glow').style.textShadow = 
+                `0 1px 2px rgba(255,255,255,0.5), ${brakeGlow.textShadow}`;
+
+            requestAnimationFrame(updateBars);
+        }
+
+        window.addEventListener('gamepadconnected', (e) => {
+            console.log('设备已连接:', e.gamepad.id);
+            updateBars();
+        });
+
+        // 初始化效果
+        document.getElementById('throttle-value').style.color = getColor(0, 'throttle');
+        document.getElementById('brake-value').style.color = getColor(0, 'brake');
+
+        if (!navigator.getGamepads()[0]) {
+            console.log('等待设备连接...');
+        }
+    </script>
+</body>
+</html>
